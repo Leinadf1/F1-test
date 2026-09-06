@@ -3,14 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clappr MPD + ClearKey DRM Player (Fixed)</title>
+  <title>Bitmovin DASH + ClearKey Player</title>
 
-  <!-- Clappr Core -->
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@clappr/player@latest/dist/clappr.min.js"></script>
-  <!-- Shaka Player Engine -->
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js"></script>
-  <!-- Clappr DASH Plugin -->
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/dash-shaka-playback@3.6.3/dist/dash-shaka-playback.min.js"></script>
+  <!-- 1. Bitmovin Player JS Core -->
+  <script type="text/javascript" src="https://cdn.bitmovin.com/player/web/8/bitmovinplayer.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -29,8 +25,6 @@
       border-radius: 4px; color: #fff; font-family: monospace; font-size: 0.9em;
     }
     input[type="text"]:focus { outline: none; border-color: #00d26a; }
-    .row { display: flex; gap: 10px; }
-    .col { flex: 1; }
     button {
       width: 100%; padding: 12px; background-color: #00d26a; border: none;
       border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; font-size: 1em; margin-top: 10px;
@@ -46,7 +40,7 @@
 <body>
 
 <div class="container">
-  <h2>Clappr DASH / ClearKey Player</h2>
+  <h2>Bitmovin DASH / ClearKey Player</h2>
   
   <div class="form-group">
     <label for="mpdUrl">URL Flusso (.mpd):</label>
@@ -58,14 +52,26 @@
     <input type="text" id="keyPair" placeholder="eb670a80d1414e6992d20e1ee9217636:100b6c20940f779a458912382ee84273">
   </div>
 
-  <button onclick="loadStream()">AVVIA RIPRODUZIONE</button>
+  <button onclick="loadStream()">AVVIA BITMOVIN PLAYER</button>
   <div id="error-log"></div>
 
   <div id="player-container"></div>
 </div>
 
 <script>
-  let playerInstance = null;
+  let player = null;
+
+  // Configurazione globale di Bitmovin
+  const playerConfig = {
+    key: "YOUR_BITMOVIN_KEY_HERE", // Può rimanere vuota per test su localhost/domain abilitati
+    playback: {
+      autoplay: true,
+      muted: true // Mute necessario per l'avvio immediato senza blocchi browser
+    },
+    tweaks: {
+      clear_buffer_on_quality_switch: true
+    }
+  };
 
   function logError(msg) {
     document.getElementById('error-log').innerText = msg;
@@ -81,40 +87,40 @@
       return;
     }
 
-    if (playerInstance) {
-      playerInstance.destroy();
+    // Se esiste già un'istanza del player, la distruggiamo prima di ricaricare
+    if (player) {
+      player.destroy();
       document.getElementById('player-container').innerHTML = '';
     }
 
-    const clearKeys = {};
+    // Inizializza il player Bitmovin sul div contenitore
+    const container = document.getElementById('player-container');
+    player = new bitmovin.player.Player(container, playerConfig);
 
-    // Supporta sia formato KID:KEY sia valori singoli
+    // Prepara la sorgente stream
+    const sourceConfig = {
+      dash: streamUrl
+    };
+
+    // Gestione DRM ClearKey per Bitmovin
     if (keyPair.includes(':')) {
       const parts = keyPair.split(':');
       const kid = parts[0].trim().replace(/-/g, '');
       const key = parts[1].trim().replace(/-/g, '');
-      clearKeys[kid] = key;
+
+      sourceConfig.drm = {
+        clearkey: [{
+          keyId: kid,
+          key: key
+        }]
+      };
     }
 
-    playerInstance = new Clappr.Player({
-      source: streamUrl,
-      parentId: "#player-container",
-      plugins: [DashShakaPlayback],
-      shakaConfiguration: {
-        drm: {
-          clearKeys: clearKeys
-        },
-        manifest: {
-          retryParameters: { maxAttempts: 2 }
-        }
-      },
-      shakaOnRequirementFailure: function(e) {
-        logError("Errore Shaka/DRM: " + JSON.stringify(e));
-      },
-      width: "100%",
-      height: "100%",
-      autoPlay: true,
-      mute: true
+    // Carica la sorgente nel player
+    player.load(sourceConfig).then(() => {
+      console.log("Stream caricato con successo su Bitmovin Player");
+    }).catch((error) => {
+      logError("Errore Bitmovin: " + error.message + " (Codice: " + error.code + ")");
     });
   }
 </script>
