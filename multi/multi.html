@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clappr MPD + ClearKey DRM Player</title>
+
+  <!-- 1. Clappr Core -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@clappr/player@latest/dist/clappr.min.js"></script>
+  <!-- 2. Shaka Player Engine -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js"></script>
+  <!-- 3. Clappr DASH Shaka Playback Plugin -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/dash-shaka-playback@3.6.3/dist/dash-shaka-playback.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      font-size: 0.9em;
+      color: #aaa;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #fff;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #00d26a;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+    .col { flex: 1; }
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #00d26a;
+      border: none;
+      border-radius: 4px;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1em;
+      margin-top: 10px;
+    }
+    button:hover { background-color: #00b058; }
+    #player-container {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      margin-top: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+    .hint {
+      font-size: 0.8em;
+      color: #777;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Clappr DASH / ClearKey Player</h2>
+  
+  <div class="form-group">
+    <label for="mpdUrl">URL Flusso (.mpd):</label>
+    <input type="text" id="mpdUrl" placeholder="https://example.com/live/stream.mpd">
+  </div>
+
+  <div class="row">
+    <div class="col form-group">
+      <label for="keyId">KID (Key ID):</label>
+      <input type="text" id="keyId" placeholder="eb670a80d1414e6992d20e1ee9217636">
+    </div>
+    <div class="col form-group">
+      <label for="key">KEY (Decryption Key):</label>
+      <input type="text" id="key" placeholder="100b6c20940f779a458912382ee84273">
+    </div>
+  </div>
+  <div class="hint">Nota: Se lo stream non ha cifratura DRM, lascia i campi KID e KEY vuoti.</div>
+
+  <button onclick="loadStream()">AVVIA RIPRODUZIONE</button>
+
+  <div id="player-container"></div>
+</div>
+
+<script>
+  let playerInstance = null;
+
+  function loadStream() {
+    const streamUrl = document.getElementById('mpdUrl').value.trim();
+    const keyId = document.getElementById('keyId').value.trim();
+    const key = document.getElementById('key').value.trim();
+
+    if (!streamUrl) {
+      alert("Inserisci un URL valdio per il flusso .mpd");
+      return;
+    }
+
+    // Distruggi l'istanza precedente se presente
+    if (playerInstance) {
+      playerInstance.destroy();
+      document.getElementById('player-container').innerHTML = '';
+    }
+
+    // Configurazione base di Shaka Player per Clappr
+    const shakaConfig = {
+      drm: {}
+    };
+
+    // Aggiungi chiavi ClearKey se fornite
+    if (keyId && key) {
+      shakaConfig.drm.clearKeys = {};
+      shakaConfig.drm.clearKeys[keyId] = key;
+    }
+
+    // Inizializza Clappr con il plugin DASH
+    playerInstance = new Clappr.Player({
+      source: streamUrl,
+      parentId: "#player-container",
+      plugins: [DashShakaPlayback],
+      shakaConfiguration: shakaConfig,
+      width: "100%",
+      height: "100%",
+      autoPlay: true,
+      mute: false
+    });
+  }
+</script>
+
+</body>
+</html>
