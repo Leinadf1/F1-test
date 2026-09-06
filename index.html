@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitmovin DASH + ClearKey Player</title>
+  <title>Bitmovin Player Nativo</title>
 
-  <!-- 1. Bitmovin Player JS Core -->
+  <!-- Bitmovin Player JS & CSS UI -->
   <script type="text/javascript" src="https://cdn.bitmovin.com/player/web/8/bitmovinplayer.js"></script>
+  <link rel="stylesheet" href="https://cdn.bitmovin.com/player/web/8/bitmovinplayer-ui.css">
+  <script type="text/javascript" src="https://cdn.bitmovin.com/player/web/8/bitmovinplayer-ui.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -14,22 +16,20 @@
       margin: 0;
       padding: 20px;
       background-color: #121212;
-      color: #e0e0e0;
+      color: #fff;
       font-family: Arial, sans-serif;
     }
     .container { max-width: 900px; margin: 0 auto; }
     .form-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #aaa; }
+    label { display: block; margin-bottom: 5px; color: #aaa; font-size: 0.9em; }
     input[type="text"] {
       width: 100%; padding: 10px; background: #1e1e1e; border: 1px solid #333;
-      border-radius: 4px; color: #fff; font-family: monospace; font-size: 0.9em;
+      border-radius: 4px; color: #fff; font-family: monospace;
     }
-    input[type="text"]:focus { outline: none; border-color: #00d26a; }
     button {
       width: 100%; padding: 12px; background-color: #00d26a; border: none;
-      border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; font-size: 1em; margin-top: 10px;
+      border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; margin-top: 10px;
     }
-    button:hover { background-color: #00b058; }
     #player-container {
       width: 100%; aspect-ratio: 16 / 9; background: #000; margin-top: 20px;
       border-radius: 8px; overflow: hidden; border: 1px solid #333;
@@ -40,7 +40,7 @@
 <body>
 
 <div class="container">
-  <h2>Bitmovin DASH / ClearKey Player</h2>
+  <h2>Bitmovin Player (UI Nativa)</h2>
   
   <div class="form-group">
     <label for="mpdUrl">URL Flusso (.mpd):</label>
@@ -52,7 +52,7 @@
     <input type="text" id="keyPair" placeholder="eb670a80d1414e6992d20e1ee9217636:100b6c20940f779a458912382ee84273">
   </div>
 
-  <button onclick="loadStream()">AVVIA BITMOVIN PLAYER</button>
+  <button onclick="loadStream()">AVVIA PLAYER</button>
   <div id="error-log"></div>
 
   <div id="player-container"></div>
@@ -60,18 +60,6 @@
 
 <script>
   let player = null;
-
-  // Configurazione globale di Bitmovin
-  const playerConfig = {
-    key: "YOUR_BITMOVIN_KEY_HERE", // Può rimanere vuota per test su localhost/domain abilitati
-    playback: {
-      autoplay: true,
-      muted: true // Mute necessario per l'avvio immediato senza blocchi browser
-    },
-    tweaks: {
-      clear_buffer_on_quality_switch: true
-    }
-  };
 
   function logError(msg) {
     document.getElementById('error-log').innerText = msg;
@@ -87,40 +75,47 @@
       return;
     }
 
-    // Se esiste già un'istanza del player, la distruggiamo prima di ricaricare
     if (player) {
       player.destroy();
       document.getElementById('player-container').innerHTML = '';
     }
 
-    // Inizializza il player Bitmovin sul div contenitore
     const container = document.getElementById('player-container');
-    player = new bitmovin.player.Player(container, playerConfig);
+    
+    // Configurazione Bitmovin
+    const config = {
+      key: "", // Lascia vuoto per il player demo / localhost
+      playback: {
+        autoplay: true,
+        muted: true
+      },
+      style: {
+        aspectratio: '16:9'
+      }
+    };
 
-    // Prepara la sorgente stream
-    const sourceConfig = {
+    player = new bitmovin.player.Player(container, config);
+
+    // Gestione DRM ClearKey
+    const source = {
       dash: streamUrl
     };
 
-    // Gestione DRM ClearKey per Bitmovin
     if (keyPair.includes(':')) {
       const parts = keyPair.split(':');
-      const kid = parts[0].trim().replace(/-/g, '');
-      const key = parts[1].trim().replace(/-/g, '');
-
-      sourceConfig.drm = {
+      source.drm = {
         clearkey: [{
-          keyId: kid,
-          key: key
+          keyId: parts[0].trim().replace(/-/g, ''),
+          key: parts[1].trim().replace(/-/g, ''),
         }]
       };
     }
 
-    // Carica la sorgente nel player
-    player.load(sourceConfig).then(() => {
-      console.log("Stream caricato con successo su Bitmovin Player");
+    player.load(source).then(() => {
+      // Collega l'interfaccia UI di Bitmovin
+      bitmovin.playerui.UIFactory.buildDefaultUI(player);
     }).catch((error) => {
-      logError("Errore Bitmovin: " + error.message + " (Codice: " + error.code + ")");
+      logError("Errore Bitmovin: " + error.message);
     });
   }
 </script>
