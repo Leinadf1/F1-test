@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clappr MPD + ClearKey DRM Player</title>
+  <title>Clappr MPD + ClearKey DRM Player (Fixed)</title>
 
-  <!-- 1. Clappr Core -->
+  <!-- Clappr Core -->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@clappr/player@latest/dist/clappr.min.js"></script>
-  <!-- 2. Shaka Player Engine -->
+  <!-- Shaka Player Engine -->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js"></script>
-  <!-- 3. Clappr DASH Shaka Playback Plugin -->
+  <!-- Clappr DASH Plugin -->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/dash-shaka-playback@3.6.3/dist/dash-shaka-playback.min.js"></script>
 
   <style>
@@ -21,66 +21,26 @@
       color: #e0e0e0;
       font-family: Arial, sans-serif;
     }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    .form-group {
-      margin-bottom: 15px;
-    }
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
-      font-size: 0.9em;
-      color: #aaa;
-    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #aaa; }
     input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      background: #1e1e1e;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #fff;
-      font-family: monospace;
-      font-size: 0.9em;
+      width: 100%; padding: 10px; background: #1e1e1e; border: 1px solid #333;
+      border-radius: 4px; color: #fff; font-family: monospace; font-size: 0.9em;
     }
-    input[type="text"]:focus {
-      outline: none;
-      border-color: #00d26a;
-    }
-    .row {
-      display: flex;
-      gap: 10px;
-    }
+    input[type="text"]:focus { outline: none; border-color: #00d26a; }
+    .row { display: flex; gap: 10px; }
     .col { flex: 1; }
     button {
-      width: 100%;
-      padding: 12px;
-      background-color: #00d26a;
-      border: none;
-      border-radius: 4px;
-      color: #000;
-      font-weight: bold;
-      cursor: pointer;
-      font-size: 1em;
-      margin-top: 10px;
+      width: 100%; padding: 12px; background-color: #00d26a; border: none;
+      border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; font-size: 1em; margin-top: 10px;
     }
     button:hover { background-color: #00b058; }
     #player-container {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      background: #000;
-      margin-top: 20px;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #333;
+      width: 100%; aspect-ratio: 16 / 9; background: #000; margin-top: 20px;
+      border-radius: 8px; overflow: hidden; border: 1px solid #333;
     }
-    .hint {
-      font-size: 0.8em;
-      color: #777;
-      margin-top: 4px;
-    }
+    #error-log { color: #ff5555; margin-top: 10px; font-family: monospace; font-size: 0.85em; }
   </style>
 </head>
 <body>
@@ -93,19 +53,13 @@
     <input type="text" id="mpdUrl" placeholder="https://example.com/live/stream.mpd">
   </div>
 
-  <div class="row">
-    <div class="col form-group">
-      <label for="keyId">KID (Key ID):</label>
-      <input type="text" id="keyId" placeholder="eb670a80d1414e6992d20e1ee9217636">
-    </div>
-    <div class="col form-group">
-      <label for="key">KEY (Decryption Key):</label>
-      <input type="text" id="key" placeholder="100b6c20940f779a458912382ee84273">
-    </div>
+  <div class="form-group">
+    <label for="keyPair">Key (Formato KID:KEY):</label>
+    <input type="text" id="keyPair" placeholder="eb670a80d1414e6992d20e1ee9217636:100b6c20940f779a458912382ee84273">
   </div>
-  <div class="hint">Nota: Se lo stream non ha cifratura DRM, lascia i campi KID e KEY vuoti.</div>
 
   <button onclick="loadStream()">AVVIA RIPRODUZIONE</button>
+  <div id="error-log"></div>
 
   <div id="player-container"></div>
 </div>
@@ -113,43 +67,54 @@
 <script>
   let playerInstance = null;
 
+  function logError(msg) {
+    document.getElementById('error-log').innerText = msg;
+  }
+
   function loadStream() {
+    logError("");
     const streamUrl = document.getElementById('mpdUrl').value.trim();
-    const keyId = document.getElementById('keyId').value.trim();
-    const key = document.getElementById('key').value.trim();
+    const keyPair = document.getElementById('keyPair').value.trim();
 
     if (!streamUrl) {
-      alert("Inserisci un URL valdio per il flusso .mpd");
+      logError("Inserisci un URL valido per il flusso .mpd");
       return;
     }
 
-    // Distruggi l'istanza precedente se presente
     if (playerInstance) {
       playerInstance.destroy();
       document.getElementById('player-container').innerHTML = '';
     }
 
-    // Configurazione base di Shaka Player per Clappr
-    const shakaConfig = {
-      drm: {}
-    };
+    const clearKeys = {};
 
-    // Aggiungi chiavi ClearKey se fornite
-    if (keyId && key) {
-      shakaConfig.drm.clearKeys = {};
-      shakaConfig.drm.clearKeys[keyId] = key;
+    // Supporta sia formato KID:KEY sia valori singoli
+    if (keyPair.includes(':')) {
+      const parts = keyPair.split(':');
+      const kid = parts[0].trim().replace(/-/g, '');
+      const key = parts[1].trim().replace(/-/g, '');
+      clearKeys[kid] = key;
     }
 
-    // Inizializza Clappr con il plugin DASH
     playerInstance = new Clappr.Player({
       source: streamUrl,
       parentId: "#player-container",
       plugins: [DashShakaPlayback],
-      shakaConfiguration: shakaConfig,
+      shakaConfiguration: {
+        drm: {
+          clearKeys: clearKeys
+        },
+        manifest: {
+          retryParameters: { maxAttempts: 2 }
+        }
+      },
+      shakaOnRequirementFailure: function(e) {
+        logError("Errore Shaka/DRM: " + JSON.stringify(e));
+      },
       width: "100%",
       height: "100%",
       autoPlay: true,
-      mute: false
+      mute: true
     });
   }
 </script>
